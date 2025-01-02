@@ -55,6 +55,9 @@ fi
 
 TMP_TXT_FILE=/tmp/sitemap-generator.txt
 SED_LOG_FILE=/tmp/sitemap-generator.sedlog.txt
+SED_LOG_FILE2=/tmp/sitemap-generator.sedlog2.txt
+
+
 
 log "URL: $URL"
 log "Output: $OUTPUT"
@@ -63,7 +66,7 @@ log "Priority: Dynamic"
 echo ""
 
 log "Crawling $URL => $TMP_TXT_FILE ..."
-$WGET --spider --recursive -e robots=off --output-file=$TMP_TXT_FILE --no-verbose --reject=.jpg,.jpeg,.css,.js,.ico,.png $URL
+$WGET --spider --recursive -e robots=off --output-file=$TMP_TXT_FILE --no-verbose --reject=.jpg,.jpeg,.css,.js,.ico,.png --reject-regex "\+graphgroup\+" $URL
 
 echo ""
 log "Cleaning urls ..."
@@ -72,8 +75,11 @@ log "Cleaning urls ..."
 # Pull URLs from wget's output
 $SED -n "s@.\+ URL:\([^ ]\+\) .\+@\1@p" $TMP_TXT_FILE > $SED_LOG_FILE
 
+#Escape Chars
+$SED "s/&/\&amp;/g" $SED_LOG_FILE > $SED_LOG_FILE2
+
 log "Sorting and removing any duplicates ..."
-$SORT -u -o $SED_LOG_FILE $SED_LOG_FILE
+$SORT -u -o $SED_LOG_FILE2 $SED_LOG_FILE2
 
 log "Generating $OUTPUT ..."
 # Header from www.xml-sitemaps.com
@@ -86,7 +92,7 @@ echo '            http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">' >> 
 # Loop over lines in the sed log file for parsing - https://unix.stackexchange.com/a/7012/67790
 IFS=$'\r\n'     # make newlines the only separator
 set -f          # disable globbing
-for i in $($CAT < "$SED_LOG_FILE"); do
+for i in $($CAT < "$SED_LOG_FILE2"); do
     BASENAME=$(echo "$i" | $AWK -F[/:] '{print $4}')
     #DIR=$(echo "$i" | sed -r 's|.*/([^/]+)/?$|\1|') # This returns the last part of the URL only (typically the page), and not the category + page. 
     #PATH_COUNT=$(echo "$i" | tr '/' ' ' | wc -w) # This counts everything. http is 1, basename is 2, first path is 3, page is 4, etc. Priority isn't accurate if URL  is in a subfolder to begin with
@@ -106,14 +112,14 @@ $CAT >>$OUTPUT <<EOL
         <lastmod>$DATE</lastmod>
         <priority>$PRIORITY</priority>
         <changefreq>$FREQUENCY</changefreq>
-    <url>
+    </url>
 EOL
 done
 
 echo '</urlset>' >> $OUTPUT
 
 log "Cleaning temp files ..."
-$RM -f $TMP_TXT_FILE  $SED_LOG_FILE
+$RM -f $TMP_TXT_FILE  $SED_LOG_FILE $SED_LOG_FILE2
 
 log "Cleaning wget's temp folder ..."
 $RM -rf $BASENAME
